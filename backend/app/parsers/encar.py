@@ -30,6 +30,9 @@ MANUFACTURER_MAP: dict[str, str] = {
     "렉서스": "Lexus",
 }
 
+MAX_RETRIES = 5
+BASE_DELAY = 2
+
 def get_english_manufacturer(korean_name: str) -> str:
     return MANUFACTURER_MAP.get(korean_name, korean_name)
 
@@ -72,6 +75,7 @@ async def fetch_page(
     semaphore: asyncio.Semaphore,
     offset: int,
     limit: int = 20,
+    retries: int = MAX_RETRIES,
 ) -> list[dict]:
     url = SEARCH_API.format(offset=offset, limit=limit)
     
@@ -79,15 +83,29 @@ async def fetch_page(
         try:
             response = await client.get(url)
             response.raise_for_status()
+
+            if response.status_code == 429:
+                raise httpx.HTTPStatusError(
+                "Rate limit hit", request=response.request, response=response
+                )
+            
             data = response.json()
             return data.get("SearchResults", [])
         
         except httpx.HTTPError as e:
+            if retries > 0:
+                delay = BASE_DELAY * (2 ** (MAX_RETRIES - retries))
+                await asyncio.sleep(delay)
+
+                return await fetch_page(
+                client, semaphore, offset, limit, retries - 1
+                )
+
             print(f"Error fetching offset={offset}: {e}")
             return []
 
 
-async def run_parser(total: int = 100) -> list[CarCreate]:
+async def run_parser(total: int) -> list[CarCreate]:
     
     semaphore = asyncio.Semaphore(SEMAPHORE_LIMIT)
     page_size = 20  
@@ -99,10 +117,14 @@ async def run_parser(total: int = 100) -> list[CarCreate]:
             fetch_page(client, semaphore, offset, page_size)
             for offset in offsets
         ]
-        pages = await asyncio.gather(*tasks)
+        pages = await asyncio.gather(*tasks, return_exceptions=True)
 
     all_items = []
     for page in pages:
+
+        if isinstance(page, BaseException):
+            continue
+
         for item in page:
             all_items.append(item)
 
