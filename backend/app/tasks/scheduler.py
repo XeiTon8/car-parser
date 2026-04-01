@@ -13,7 +13,7 @@ async def scheduled_parse() -> None:
         service = CarService(session)
         try:
             await service.refresh_cars()
-            
+
         except Exception as e:
             logger.error(f"Scheduled parse failed: {e}")
 
