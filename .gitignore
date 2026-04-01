@@ -1,0 +1,13 @@
+.env
+
+# frontend
+node_modules
+dist/
+build/
+*.local
+
+
+# backend
+venv
+__pycache__
+alembic/versions/*.pyc

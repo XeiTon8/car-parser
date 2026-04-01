@@ -1,0 +1,1 @@
+from app.models.car import Base, Car
