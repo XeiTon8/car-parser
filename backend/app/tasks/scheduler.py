@@ -27,6 +27,5 @@ def start_scheduler() -> None:
     )
     scheduler.start()
 
-
 def shutdown_scheduler() -> None:
     scheduler.shutdown(wait=False)
