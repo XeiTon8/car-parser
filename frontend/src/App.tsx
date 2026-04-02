@@ -1,18 +1,30 @@
 import { useState, useEffect } from "react";
 
 import type { Car } from "./components/CarCard";
+import { data } from "./data";
 
 import Header from "./components/Header"
 import CarGrid from "./components/CarGrid";
 
 import "./index.css";
+import Hero from "./components/Hero";
 
 const URL = import.meta.env.VITE_API_URL;
 const CARS_LIMIT = 20;
 
+const parsedCars: Car[] = data.map((car) => ({
+  id: Number(car.id),
+  brand: car.brand,
+  model: car.model,
+  year: Number(car.year),
+  mileage: Number(car.mileage),
+  price: Number(car.price),
+  image_url: car.image_url,
+}));
+
 export default function App() {
 
-  const [cars, setCars] = useState<Car[]>([]);
+  const [cars, setCars] = useState<Car[]>(parsedCars);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -20,28 +32,34 @@ export default function App() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchCars = async (skip = 0, replace = false) => {
-    try {
-      setLoading(true);
+  const fakeFetchCars = (skip = 0, limit = CARS_LIMIT): Promise<Car[]> => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const slice = parsedCars.slice(skip, skip + limit);
+      resolve(slice);
+    }, 1500);
+  });
+};
 
-      const res = await fetch(`${URL}/cars?skip=${skip}&limit=${CARS_LIMIT}`);
-      if (!res.ok) throw new Error("Failed to fetch cars");
+const fetchCars = async (skip = 0, replace = false) => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      const data = await res.json();
+    const data = await fakeFetchCars(skip, CARS_LIMIT);
 
-      if (data.length < CARS_LIMIT) setHasMore(false);
+    if (data.length < CARS_LIMIT) setHasMore(false);
 
-      setCars((prev) => (replace ? data : [...prev, ...data]));
-
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setCars((prev) => (replace ? data : [...prev, ...data]));
+  } catch (err: any) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
-    fetchCars(0, true);
+   fetchCars(0, true);
   }, []);
 
   const loadMore = () => {
@@ -53,6 +71,7 @@ export default function App() {
   return (
     <div className="app">
       <Header />
+      <Hero />
       <main className="main-content">
         <div className="section-header">
           <h2 className="section-title">Available Cars</h2>

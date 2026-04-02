@@ -42,8 +42,8 @@ export default function CarGrid({ cars, loading, error }: CarGridProps) {
       {cars.map((car) => (
         <CarCard key={car.id} car={car} />
       ))}
-      {loading &&
-        Array.from({ length: 8 }).map((_, i) => (
+      {loading && cars.length > 0 &&
+        Array.from({ length: 4 }).map((_, i) => (
           <CarSkeleton key={`loading-${i}`} />
         ))}
     </section>
