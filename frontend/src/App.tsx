@@ -9,7 +9,6 @@ import CarGrid from "./components/CarGrid";
 import "./index.css";
 import Hero from "./components/Hero";
 
-const URL = import.meta.env.VITE_API_URL;
 const CARS_LIMIT = 20;
 
 const parsedCars: Car[] = data.map((car) => ({
