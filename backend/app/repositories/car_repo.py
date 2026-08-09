@@ -13,7 +13,7 @@ class CarRepository:
     async def get_all(self, skip: int = 0, limit: int = 20) -> list[Car]:
         result = await self.session.execute(
             select(Car)
-            .order_by(Car.created_at.desc())
+            .order_by(Car.created_at.desc(), Car.id.desc())
             .offset(skip)
             .limit(limit)
         )
