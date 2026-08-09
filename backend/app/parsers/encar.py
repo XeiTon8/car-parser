@@ -1,5 +1,6 @@
 import asyncio
 import httpx
+import random
 from app.schemas.car import CarCreate
 from app.utils.currency import krw_to_usd
 from app.utils.http import get_http_client
@@ -32,6 +33,7 @@ MANUFACTURER_MAP: dict[str, str] = {
 
 MAX_RETRIES = 5
 BASE_DELAY = 2
+MAX_DELAY = 30
 
 def get_english_manufacturer(korean_name: str) -> str:
     return MANUFACTURER_MAP.get(korean_name, korean_name)
@@ -70,40 +72,57 @@ def parse_search_result(item: dict) -> CarCreate | None:
         return None
 
 
+def _retry_delay(attempt: int, response: httpx.Response | None = None) -> float:
+    if response is not None:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return min(float(retry_after), MAX_DELAY)
+            except ValueError:
+                pass
+
+    delay = min(BASE_DELAY * (2 ** attempt), MAX_DELAY)
+    return delay * (0.5 + random.random())
+
+
 async def fetch_page(
     client: httpx.AsyncClient,
     semaphore: asyncio.Semaphore,
     offset: int,
     limit: int = 20,
-    retries: int = MAX_RETRIES,
 ) -> list[dict]:
     url = SEARCH_API.format(offset=offset, limit=limit)
-    
-    async with semaphore:
-        try:
-            response = await client.get(url)
-            response.raise_for_status()
 
-            if response.status_code == 429:
-                raise httpx.HTTPStatusError(
-                "Rate limit hit", request=response.request, response=response
-                )
-            
-            data = response.json()
-            return data.get("SearchResults", [])
-        
-        except httpx.HTTPError as e:
-            if retries > 0:
-                delay = BASE_DELAY * (2 ** (MAX_RETRIES - retries))
-                await asyncio.sleep(delay)
+    for attempt in range(MAX_RETRIES + 1):
+        delay: float | None = None
 
-                return await fetch_page(
-                client, semaphore, offset, limit, retries - 1
-                )
+        async with semaphore:
+            try:
+                response = await client.get(url)
 
-            print(f"Error fetching offset={offset}: {e}")
-            return []
+                if response.status_code == 429 or response.status_code >= 500:
+                    if attempt == MAX_RETRIES:
+                        print(f"offset={offset}: {response.status_code} after {MAX_RETRIES} retries")
+                        return []
+                    delay = _retry_delay(attempt, response)
+                else:
+                    response.raise_for_status()
+                    return response.json().get("SearchResults", [])
 
+            except httpx.HTTPStatusError as e:
+                print(f"offset={offset}: {e.response.status_code}")
+                return []
+
+            except (httpx.TransportError, ValueError) as e:
+                if attempt == MAX_RETRIES:
+                    print(f"offset={offset}: {e!r}")
+                    return []
+                delay = _retry_delay(attempt)
+
+        if delay is not None:
+            await asyncio.sleep(delay)
+
+    return []
 
 async def run_parser(total: int) -> list[CarCreate]:
     
